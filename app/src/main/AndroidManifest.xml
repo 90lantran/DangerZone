@@ -43,5 +43,8 @@ limitations under the License.
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <meta-data
+            android:name="io.fabric.ApiKey"
+            android:value="d6502538e32f30acf45a7fd77f15a139b05b69a3" />
     </application>
 </manifest>

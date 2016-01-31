@@ -95,6 +95,7 @@
         android:textIsSelectable="true"
         android:layout_gravity="center_vertical|center_horizontal"
         android:textSize="@dimen/lat_long_text_size"
+        android:text=""
         />
     <TextView
         android:id="@+id/text2"
@@ -106,6 +107,14 @@
         android:layout_marginTop="@dimen/text_margin"
         android:textIsSelectable="true"
         android:textSize="@dimen/lat_long_text_size"
+        android:text=""
         />
+    <com.twitter.sdk.android.core.identity.TwitterLoginButton
+        android:id="@+id/twitter_login_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|center_horizontal"
+        android:layout_centerInParent="true"/>
+
 
 </LinearLayout>

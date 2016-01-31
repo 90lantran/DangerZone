@@ -16,6 +16,7 @@
 
 package com.google.android.gms.location.sample.basiclocationsample;
 
+import android.content.Intent;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -36,6 +37,17 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
 import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
 import com.google.android.gms.location.LocationServices;
+import com.twitter.sdk.android.Twitter;
+import com.twitter.sdk.android.core.Callback;
+import com.twitter.sdk.android.core.Result;
+import com.twitter.sdk.android.core.TwitterApiClient;
+import com.twitter.sdk.android.core.TwitterAuthConfig;
+import com.twitter.sdk.android.core.TwitterCore;
+import com.twitter.sdk.android.core.TwitterException;
+import com.twitter.sdk.android.core.TwitterSession;
+import com.twitter.sdk.android.core.identity.TwitterLoginButton;
+import com.twitter.sdk.android.core.models.Tweet;
+import com.twitter.sdk.android.core.services.StatusesService;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -46,8 +58,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+
+import io.fabric.sdk.android.Fabric;
+import twitter4j.auth.AccessToken;
+
 
 /**
  * Location sample.
@@ -58,10 +76,16 @@ import java.util.Locale;
  * also using APIs that need authentication.
  */
 public class MainActivity extends AppCompatActivity implements
-        ConnectionCallbacks, OnConnectionFailedListener {
+        ConnectionCallbacks, OnConnectionFailedListener  {
+
+    // Note: Your consumer key and secret should be obfuscated in your source code before shipping.
+    private static final String TWITTER_KEY = "5mMn1dHcdC5PGdeSIhFqeamWB";
+    private static final String TWITTER_SECRET = "5oDU0tY2Xe1NCrzm7egiXDgmWBEZnrdyrLrcXjoyoeHvWSm63d";
+    private TwitterLoginButton loginButton;
+    private String completeAddress;
 
     protected static final String TAG = "MainActivity";
-
+    Tweeter tweeter = new Tweeter();
     /**
      * Provides the entry point to Google Play services.
      */
@@ -83,10 +107,14 @@ public class MainActivity extends AppCompatActivity implements
      */
     private GoogleApiClient client;
 
+    AccessToken accessToken = null;
+
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        TwitterAuthConfig authConfig = new TwitterAuthConfig(TWITTER_KEY, TWITTER_SECRET);
+        Fabric.with(this, new Twitter(authConfig));
         setContentView(R.layout.main_activity);
 
         mLatitudeLabel = getResources().getString(R.string.latitude_label);
@@ -97,16 +125,40 @@ public class MainActivity extends AppCompatActivity implements
         buildGoogleApiClient();
 
 
-//        if (savedInstanceState == null) {
-//            getSupportFragmentManager().beginTransaction()
-//                    .add(R.id.rate_text_view, new CFragment())
-//                    .commit();
-//        }
 
         // ATTENTION: This was auto-generated to implement the App Indexing API.
         // See https://g.co/AppIndexing/AndroidStudio for more information.
         client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
+
+        loginButton = (TwitterLoginButton) findViewById(R.id.twitter_login_button);
+        loginButton.setCallback(new Callback<TwitterSession>() {
+            @Override
+            public void success(Result<TwitterSession> result) {
+                // The TwitterSession is also available through:
+                // Twitter.getInstance().core.getSessionManager().getActiveSession()
+                TwitterSession session = result.data;
+                // TODO: Remove toast and use the TwitterSession's userID
+                // with your app's user model
+                String msg = "@" + session.getUserName() + " logged in! (#" + session.getUserId() + ")";
+                Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
+            }
+
+            @Override
+            public void failure(TwitterException exception) {
+                Log.d("TwitterKit", "Login with Twitter failure", exception);
+            }
+        });
+
     }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        // Make sure that the loginButton hears the result from any
+        // Activity that it triggered.
+        loginButton.onActivityResult(requestCode, resultCode, data);
+    }
+
 
     /**
      * Builds a GoogleApiClient. Uses the addApi() method to request the LocationServices API.
@@ -195,7 +247,7 @@ public class MainActivity extends AppCompatActivity implements
                 String country = addresses.get(0).getCountryName();
                 String postalCode = addresses.get(0).getPostalCode();
 
-                String completeAddress = address + ", " + city+", "+ state + " " + postalCode + ", "+country;
+                completeAddress = address + ", " + city+", "+ state + " " + postalCode + ", "+country;
                 Log.i(TAG,completeAddress);
                 TextView add = (TextView) findViewById(R.id.full_adddress);
                 add.setText(completeAddress);
@@ -240,14 +292,6 @@ public class MainActivity extends AppCompatActivity implements
         FetchTask fetchTask = new FetchTask();
         fetchTask.execute(mLastLocation);
 
-//
-//        final ImageButton demo_button = (ImageButton) findViewById(R.id.submit_button);
-//        demo_button.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View v) {
-//                demo_button.setImageResource(R.drawable.meter2);
-//            }
-//        });
     }
 
 
@@ -257,18 +301,11 @@ public class MainActivity extends AppCompatActivity implements
 
         @Override
         protected String doInBackground(Location... params) {
-            // These two need to be declared outside the try/catch
-            // so that they can be closed in the finally block.
+
             HttpURLConnection urlConnection = null;
             BufferedReader reader = null;
 
-            // Will contain the raw JSON response as a string.
             String forecastJsonStr = null;
-
-
-            String format = "json";
-            String units = "metric";
-            int numDays = 7;
 
             try {
 
@@ -277,22 +314,8 @@ public class MainActivity extends AppCompatActivity implements
                 // "http://api.openweathermap.org/data/2.5/forecast/daily?";
                 //final String QUERY_PARAM = "q";
                 String SLASH = "/";
-//                final String QUERY_LAT = "lat";
-//                final String QUERY_LON = "lon";
-//                final String FORMAT_PARAM = "mode";
-//                final String UNITS_PARAM = "units";
-//                final String DAYS_PARAM = "cnt";
-//                final String APPID_PARAM = "APPID";
 
                 params[0].getLongitude();
-//                Uri builtUri = Uri.parse(FORECAST_BASE_URL).buildUpon().append
-//                        .appendQueryParameter(QUERY_LAT,String.valueOf(params[0].getLatitude()))
-//                        .appendQueryParameter(QUERY_LON,String.valueOf(params[0].getLongitude()))
-//                        .appendQueryParameter(FORMAT_PARAM, format)
-//                        .appendQueryParameter(UNITS_PARAM, units)
-//                        .appendQueryParameter(DAYS_PARAM, Integer.toString(numDays))
-//                        .appendQueryParameter(APPID_PARAM, BuildConfig.OPEN_WEATHER_MAP_API_KEY)
-//                        .build();
                 //39.137076,-77.2028857
                 String endPoint = FORECAST_BASE_URL + SLASH + Double.toString(params[0].getLatitude()) + SLASH + Double.toString(params[0].getLongitude());
                 //String endPoint = FORECAST_BASE_URL + SLASH + Double.toString(39.137076) + SLASH + Double.toString(-77.2028857);
@@ -301,11 +324,6 @@ public class MainActivity extends AppCompatActivity implements
                 Log.v(LOG_TAG, "Built URI " + url);
 
                 // Construct the URL for the OpenWeatherMap query
-                // Possible parameters are avaiable at OWM's forecast API page, at
-                // http://openweathermap.org/API#forecast
-//                String baseUrl = "http://api.openweathermap.org/data/2.5/forecast/daily?q=94043&mode=json&units=metric&cnt=7";
-//                String apiKey = "&APPID=" + BuildConfig.OPEN_WEATHER_MAP_API_KEY;
-//                URL url = new URL(baseUrl.concat(apiKey));
 
                 // Create the request to OpenWeatherMap, and open the connection
                 urlConnection = (HttpURLConnection) url.openConnection();
@@ -370,6 +388,7 @@ public class MainActivity extends AppCompatActivity implements
             JSONObject forecastJson = new JSONObject(forecastJsonStr);
 
             String rate = forecastJson.getString(OWM_DANGER);
+            //String rate = "4";
 
             Log.i(LOG_TAG, "TTTTTTTTTTT " + rate);
             return rate;
@@ -377,9 +396,10 @@ public class MainActivity extends AppCompatActivity implements
 
         @Override
         protected void onPostExecute(String rate) {
-            Log.i(LOG_TAG, rate);
-//                TextView priceTextView = (TextView) findViewById(R.id.rate_text_view);
-//                priceTextView.setText(rate);
+            Log.i(LOG_TAG, "onPostExecute" + rate);
+            Date time = new Date();
+            Calendar calendar = Calendar.getInstance();
+
             ImageView image = (ImageView) findViewById(R.id.meter);
             TextView textView2 = (TextView) findViewById(R.id.text2);
             TextView textView1 = (TextView) findViewById(R.id.text1);
@@ -404,12 +424,37 @@ public class MainActivity extends AppCompatActivity implements
                 textView1.setText("4");
 
                 textView2.setText("Very unsafe. Leave ASAP.");
+                tweet(completeAddress +". " +calendar.get(Calendar.HOUR)+":" +calendar.get(Calendar.MINUTE));
+
             } else if (rate.equals("5")) {
                 image.setImageResource(R.drawable.meter5);
                 textView1.setText("5");
 
                 textView2.setText("You're going to get shot.");
+                tweet(completeAddress +". " +calendar.get(Calendar.HOUR)+":" +calendar.get(Calendar.MINUTE));
             }
         }
+
+        private void tweet(String completeAddress){
+            TwitterApiClient twitterApiClient = TwitterCore.getInstance().getApiClient();
+            StatusesService statusesService = twitterApiClient.getStatusesService();
+            statusesService.update(completeAddress, null, null, null, null, null, null, null, new Callback<Tweet>() {
+                @Override
+                public void success(Result<Tweet> result) {
+                    Log.i(TAG,"SUCCESS");
+                }
+
+                @Override
+                public void failure(TwitterException e) {
+
+                    Log.i(TAG,"FAILURE");
+                }
+            });
+        }
+
+
     }
+
+
 }
+
